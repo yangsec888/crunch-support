@@ -1,0 +1,105 @@
+#!/usr/bin/env python
+################################################################################
+#  Python Package to Support 42crunch System Deployment
+#
+#    Author: Sam Li <yang.li@owasp.org>
+#
+#       2022 - 2023
+################################################################################
+#
+print("""
+################################################################################
+# The goal of this program is to automate API audit workflow. It works by
+# publishing cloud swagger files to 42Crunch platform automatically.
+#
+################################################################################
+# Version: 0.4, Date: December 5 2022
+# Author: Sam Li
+# Usage:
+#  $ api-audit -h
+#
+# Prerequisite:
+# a. Python 3 installed in your environment.
+# b. API key access to the 42Crunch platform
+###############################################################################
+""")
+
+import argparse, json
+import crunch_support
+from crunch_support.util import *
+
+# command argument switch setup
+parser = argparse.ArgumentParser(description='This program will automate the cyclondex scan finding export to DefectDojo. ')
+parser.add_argument('-k','--key', help='42Crunch API key',  required=True)
+parser.add_argument('-b','--base', help='Code repository base directory / path',  required=True)
+parser.add_argument('-y','--yaml', help='Program YAML configuration file',  required=True)
+parser.add_argument('-v','--verbose', help='(Optional) Verbose mode',action='store_true', default=False, required=False)
+parser.add_argument('-e','--environment', help='(Optional) Program running environment - default to "development"', required=False)
+args = parser.parse_args()
+args.environment = args.environment if args.environment else 'development'  # set default variables
+args.yaml = args.yaml if args.yaml else 'api-audit.yaml'
+env = args.environment
+if args.verbose:
+    print("ENV: ", env)
+
+################################################################################
+#                     Main Program
+################################################################################
+if __name__ == '__main__':
+    print("Initiate a 42crunch client instance")
+    crunch = crunch_support.CrunchClient(args.key, args.yaml, args.environment)
+    collection_uri = crunch.conf_dict[env]['platform']['42c-addr'] + crunch.conf_dict[env]['platform']['collection-uri']
+    api_uri = crunch.conf_dict[env]['platform']['42c-addr'] + crunch.conf_dict[env]['platform']['api-uri']
+    if args.verbose:
+        print('collection_uri:', collection_uri)
+    print("Retrieve 42c collection list ...")
+    collections = crunch.get_collection_list(collection_uri)
+    if args.verbose:
+        print('collections: ', collections)
+    # iterate over collections list within configuration file, and create a new collection in 42Crunch platform if needed
+    for key,val in crunch.conf_dict[env]['collections'].items():
+        if crunch.is_collection_exist(collections, key):
+            print('Collection already exist - skip: ', key)
+        else:
+            resp = crunch.create_collection(collection_uri, key, args.verbose)
+            if resp.status_code == 200:
+                print('Successfully create new collection in 42Crunch platform:', key)
+                print('Update 42c colllection list accordingly')
+                print(resp.text)
+                collections.append(json.loads(resp.text)['desc'])
+            else:
+                print('Collection creation failed: ', resp.status_code)
+                exit(1)
+        cid = crunch.lookup_collection_id(collections, key)
+        apis_uri = collection_uri + '/' + cid + '/apis'
+        apis_list = crunch.get_apis_by_cid(apis_uri, cid)['list']
+        if args.verbose:
+            print("cid: ", cid, "val: ", val, "Existing APIs: ", apis_list)
+        # Perform git operations on the code repo
+        print("Perform git operations on repo: ", val['repo-name'])
+        git_op(val, args.base, args.verbose)
+        # Now it's the time to import api
+        for key1,val1 in val['apis'].items():
+            print("Start publishing swagger file: ",key1, ", to collection: ", key)
+            is_yaml = True if (val1['format'].upper() == "YAML") else False
+            swagger_file = args.base + val1['open-api-file']
+            swagger_data = get_swagger_dict(swagger_file, is_yaml)
+            api_name = crunch.get_api_name(swagger_data)
+            if is_file(swagger_file):
+                if crunch.is_new_api(api_name, apis_list):
+                    code = crunch.create_api(api_name, api_uri, swagger_file, cid, is_yaml, args.verbose)
+                    if code == 200:
+                        print("Swagger file upload for audit successfully")
+                    else:
+                        print("Swagger file upload for audit failed: ", swagger_file)
+                else:
+                    api_id = crunch.get_api_id(api_name, apis_list)
+                    update_uri = api_uri+'/'+api_id
+                    code = crunch.update_api(update_uri, swagger_file, is_yaml, args.verbose)
+                    if code == 200:
+                        print("Swagger file upload for audit successfully")
+                    else:
+                        print("Swagger file upload for audit failed: ", swagger_file)
+            else:
+                print("Error swagger file does not exist: ", swagger_file)
+                exit(1)

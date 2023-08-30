@@ -1,0 +1,5 @@
+recursive-include tests *.py
+recursive-include src/depreciate/*
+
+include src/conf/*
+include src/tests/*

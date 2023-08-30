@@ -1,0 +1,67 @@
+# configuration file for api-scan
+---
+
+default: &default
+  # Outline 42crunch platform API parameters here
+  platform:
+    42c-addr: https://platform.42crunch.com/
+    42c-headers:
+      accept: application/json
+      X-API-KEY: xxx
+    collection-uri: api/v1/collections
+    api-uri: api/v1/apis
+  # Outline xxx (xxx) cloud access parameters here
+  xxx-security:
+    pwd-start-uri: https://qa.xxx.test.com
+    pwd-user: <%= ENV['pwd_user'] %>
+    pwd-pass: <%= ENV['pwd_pass'] %>
+    chrome-driver: /usr/local/bin/chromedriver
+  # setup the 42Crunch collections / apis based on source code repository file structures
+  collections:
+    xxx-xxx_xxx_service:
+      repo-name: xxx_xxx_service
+      repo-path: /xxx_xxx_service
+      repo-branch: main
+      apis:
+        xxx_open_apis:
+          format: YAML
+          open-api-file: /xxx_xxx_service/services/patient-with-xxx-api/src/docs/xxx_open_apis.yaml
+          open-api-version: 3.0.0
+          api-scan-url: https://qa.xxx.test.com
+          authen-type: xxx_pwd
+
+# Development environment
+development:
+  <<: *default
+
+
+# Test environment
+test:
+  <<: *default
+
+
+# Production environment
+production:
+  platform:
+    42c-addr: https://platform.us.42crunch.cloud/
+    collection-uri: api/v1/collections
+    api-uri: api/v1/apis
+  # Outline xxx (xxx) cloud access parameters here
+  xxx-security:
+    pwd-start-uri: https://qa.xxx.test.com
+    pwd-user: <%= ENV['pwd_user'] %>
+    pwd-pass: <%= ENV['pwd_pass'] %>
+    chrome-driver: /usr/local/bin/chromedriver
+  # setup the 42Crunch collections / apis based on source code repository file structures
+  collections:
+    xxx-xxx_xxx_service:
+      repo-name: xxx_xxx_service
+      repo-path: /xxx_xxx_service
+      repo-branch: main
+      apis:
+        xxx_open_apis:
+          format: YAML
+          open-api-file: /xxx_xxx_service/services/patient-with-xxx-api/src/docs/xxx_open_apis.yaml
+          open-api-version: 3.0.0
+          api-scan-url: https://qa.xxx.test.com
+          authen-type: xxx_pwd

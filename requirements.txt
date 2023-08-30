@@ -1,0 +1,6 @@
+# requirements.txt for 42crunch-support using Python 3.x
+requests==2.31.0
+ruamel.yaml==0.17.21
+lxml==4.9.1
+selenium==4.0.0a6.post2
+selenium-wire

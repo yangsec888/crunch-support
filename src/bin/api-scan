@@ -1,0 +1,71 @@
+#!/usr/bin/env python
+#
+print("""
+################################################################################
+# The goal of this program is to automate API scan orkflow. It works by
+# scan APIs defined in the yaml file automatically.
+#
+################################################################################
+# Version: 0.1, Date: December 8 2022
+# Author: Sam Li
+# Usage:
+#  $ api-scan -h
+#
+# Prerequisite:
+# a. Python 3 installed in your environment.
+# b. API key access to the 42Crunch platform
+# c. JWT token to scan API endpoints.
+###############################################################################
+""")
+import argparse
+import crunch_support
+from crunch_support.util import *
+from crunch_support.token_services import *
+
+# command argument switch setup
+parser = argparse.ArgumentParser(description='This program will automate the cyclondex scan finding export to DefectDojo. ')
+parser.add_argument('-k','--key', help='42Crunch API key',  required=True)
+parser.add_argument('-t','--token', help='API access token ',  required=False)
+parser.add_argument('-b','--base', help='Code repository base directory / path',  required=True)
+parser.add_argument('-y','--yaml', help='Program YAML configuration file',  required=True)
+parser.add_argument('-v','--verbose', help='(Optional) Verbose mode',action='store_true', default=False, required=False)
+parser.add_argument('-e','--environment', help='(Optional) Program running environment - default to "development"', required=False)
+args = parser.parse_args()
+args.environment = args.environment if args.environment else 'development'  # set default variables
+args.yaml = args.yaml if args.yaml else 'conf/api-scan-cloud.yaml'
+env = args.environment
+
+################################################################################
+#                     Main Program
+################################################################################
+if __name__ == '__main__':
+    print("Initiate a 42crunch client instance")
+    crunch = crunch_support.CrunchClient(args.key, args.yaml, args.environment)
+    collection_uri = crunch.conf_dict[env]['platform']['42c-addr'] + crunch.conf_dict[env]['platform']['collection-uri']
+    if args.verbose:
+        print('conf_dict:', crunch.conf_dict, '\ncollection_uri:', collection_uri)
+    print("Retrieve 42c collection list ...")
+    collections = crunch.get_collection_list(collection_uri)
+    if args.verbose:
+        print('collections: ', collections)
+    # iterate over collections list within configuration file, and create a new collection in 42Crunch platform if needed
+    for key,val in crunch.conf_dict[env]['collections'].items():
+        cid = crunch.lookup_collection_id(collections, key)
+        apis_uri = collection_uri + '/' + cid + '/apis'
+        apis_list = crunch.get_apis_by_cid(apis_uri, cid)['list']
+        if args.verbose:
+            print("cid: ", cid, "\nval: ", val, "\nExisting APIs: ", apis_list)
+        # Now it's the time to scan apis
+        for key1,val1 in val['apis'].items():
+            print("Start scan api: ",key1, ", in collection: ", key)
+            is_yaml = True if (val1['format'].upper() == "YAML") else False
+            swagger_file = args.base + val1['open-api-file']
+            swagger_data = get_swagger_dict(swagger_file, is_yaml)
+            api_name = crunch.get_api_name(swagger_data)
+            api_id = crunch.get_api_id(api_name, apis_list)
+            api_scan_url = val1['api-scan-url']
+            print('Prepare for API Scan Target: ', api_scan_url)
+            token = args.token if args.token else get_token(val1, crunch.conf_dict, env, args.verbose)
+            print("Use scan token: ", token)
+            crunch.scan_api(api_id, token, api_scan_url, args.verbose)
+
